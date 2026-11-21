@@ -24,20 +24,48 @@ const createDom = (element) => {
   return dom;
 };
 
-const reconcile = (parentDom, currentElement, newElement) => {
-  const currentDom = parentDom.firstChild;
+const reconcileChildren = (parentDom, oldChildren, newChildren) => {
+
+  const maxLength = Math.max(oldChildren.length, newChildren.length);
+
+  for (let i = 0; i < maxLength; i++) {
+    reconcile(
+      parentDom,
+      oldChildren[i] ?? null,
+      newChildren[i] ?? null,
+      i
+    );
+  }
+  return newChildren;
+};
+
+
+const updateProps = (dom, oldProps, newProps) => {
+  Object.entries(oldProps).forEach(([key, value]) => {
+    if (key === "children") {
+      return reconcileChildren(dom, value, newProps.children);
+    }
+    if (!(key in newProps)) {
+      dom.removeAttribute(key)
+    }
+    else if (newProps[key] !== value) {
+      dom[key] = newProps[key]
+    }
+  })
+  Object.keys(newProps).forEach(key => {
+    if (!(key in oldProps)) {
+      dom[key] = newProps[key]
+    }
+  })
+  return newProps
+};
+
+const reconcile = (parentDom, currentElement, newElement, index) => {
   if (currentElement === null && newElement === null) {
     return null;
-  } else if (newElement === null) {
-    if (
-      typeof currentElement === "string" ||
-      typeof currentElement === "number"
-    ) {
-      parentDom.textContent = "";
-    } else {
-      parentDom.removeChild(currentDom);
-    }
-  } else if (currentElement === null) {
+  }
+
+  if (currentElement === null) {
     if (typeof newElement === "string" || typeof newElement === "number") {
       const dom = document.createTextNode(newElement);
       parentDom.appendChild(dom);
@@ -45,38 +73,35 @@ const reconcile = (parentDom, currentElement, newElement) => {
       const dom = createDom(newElement);
       parentDom.appendChild(dom);
     }
-  } else if (
+    return newElement
+  }
+
+  const currentDom = parentDom.childNodes[index];
+
+  if (newElement === null) {
+    parentDom.removeChild(currentDom);
+    return newElement
+  }
+
+  if (
     (typeof currentElement === "string" ||
       typeof currentElement === "number") &&
     (typeof newElement === "string" ||
       typeof newElement === "number")
   ) {
     currentDom.textContent = newElement;
-  } else if (currentElement.type !== newElement.type) {
-    const dom = createDom(newElement);
-    parentDom.replaceChild(dom, parentDom.firstChild);
-  } else if (currentElement.type === newElement.type) {
-    Object.entries(currentElement.props).forEach(([key, value]) => {
-      if (key === "children") {
-        const oldChildren = currentElement.props.children;
-        const newChildren = newElement.props.children;
-
-        const maxLength = Math.max(oldChildren.length, newChildren.length);
-
-        for (let i = 0; i < maxLength; i++) {
-          reconcile(currentDom, oldChildren[i] ?? null, newChildren[i] ?? null);
-        }
-      } else if (newElement.props[key] !== value) {
-        currentDom[key] = value;
-      } else if (!(key in newElement.props)) {
-        delete currentDom[key];
-      }
-    });
-    Object.entries(newElement.props).forEach(([key, value]) => {
-      if (!(key in currentElement.props)) currentDom[key] = value;
-    });
+    return newElement
   }
-  return newElement;
+
+  if (currentElement.type !== newElement.type) {
+    const dom = createDom(newElement);
+    parentDom.replaceChild(dom, currentDom);
+    return newElement
+  }
+
+  updateProps(createDom, currentElement.props, newElement.props)
+
+  return newElement
 };
 
 let currentElement = null;
